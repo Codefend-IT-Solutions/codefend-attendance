@@ -8,7 +8,7 @@ const server = http.createServer(app);
 
 //CORS
 app.use(cors());
-
+console.log("Starting server...");
 //Project files and routes
 const apiRouter = require("./routes");
 const connect = require("./config/db");
