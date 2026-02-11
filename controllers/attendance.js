@@ -391,7 +391,11 @@ module.exports.getAttendance = async (req, res) => {
         const days = attendance.map((record) => {
             const d = record.checkIn || record.createdAt;
             const date = new Date(d);
-            const dateStr = date.toISOString().slice(0, 10); // YYYY-MM-DD
+            // Derive date parts in local time so they match the original check-in/check-out
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD in local time
             const weekday = WEEKDAY_LABELS[date.getDay()];
 
             let statusLabel = "Unknown";
@@ -403,11 +407,10 @@ module.exports.getAttendance = async (req, res) => {
             )
                 statusLabel = "Absent";
 
-            const toTime = (dt) =>
-                dt ? new Date(dt).toISOString().slice(11, 16) : null;
-
-            const checkInTime = toTime(record.checkIn);
-            const checkOutTime = toTime(record.checkOut);
+            // Send raw ISO timestamps for check-in / check-out.
+            // Frontend is responsible for rendering them in the user's local timezone.
+            const checkIn = record.checkIn ? record.checkIn.toISOString() : null;
+            const checkOut = record.checkOut ? record.checkOut.toISOString() : null;
 
             const hasLocation = !!record.location;
             const locationLabel = hasLocation ? "Office" : null;
@@ -423,8 +426,8 @@ module.exports.getAttendance = async (req, res) => {
                 date: dateStr,
                 weekday,
                 status: statusLabel,
-                checkInTime,
-                checkOutTime,
+                checkIn,
+                checkOut,
                 checkInLocation: locationLabel,
                 checkOutLocation: locationLabel,
                 imageLabel,
