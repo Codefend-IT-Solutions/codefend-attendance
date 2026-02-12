@@ -1,18 +1,9 @@
 // Models
+const userModel = require("../models/User");
 const attendanceModel = require("../models/Attendance");
-
-// Schemas
-const { logAttendanceSchema } = require("../schema/Attendance");
 
 // Services
 const UploadService = require("../services/UploadService");
-
-// Utils
-const { calculateDistanceMeters } = require("../utils/Methods");
-
-// Helper Variables
-const OFFICE_COORDS = { lat: 33.97331944724137, lng: 71.45657513924102 };
-const MAX_DISTANCE_FROM_OFFICE_METERS = 500;
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -51,211 +42,29 @@ const computeWorkingDaysByWeek = (year, monthIndex) => {
 };
 
 /**
- * @description Log Attendance
- * @route POST /api/attendance/log
+ * @description Get All Users
+ * @route GET /api/admin/users/get
  * @access Private
  */
-module.exports.logAttendance = async (req, res) => {
-    // If using multipart/form-data, location and device may come as JSON strings.
-    if (typeof req.body.location === "string") {
-        try {
-            req.body.location = JSON.parse(req.body.location);
-        } catch (e) {
-            // leave as-is; Joi validation will handle invalid format
-        }
-    }
-
-    if (typeof req.body.device === "string") {
-        try {
-            req.body.device = JSON.parse(req.body.device);
-        } catch (e) {
-            // leave as-is; Joi validation will handle invalid format
-        }
-    }
-
-    // Error Handling
-    const { error, value } = logAttendanceSchema(req.body);
-    if (error) {
-        return res
-            .status(400)
-            .json({ msg: error.details[0].message, status: false });
-    }
-
-    const { _id: userId } = req.user;
-    const {
-        action,
-        timestampIso,
-        displayTime,
-        displayDate,
-        location,
-        device,
-    } = value;
-
-    const timestamp = new Date(timestampIso);
-    if (Number.isNaN(timestamp.getTime())) {
-        return res
-            .status(400)
-            .json({ msg: "Invalid timestampIso", status: false });
-    }
-
+module.exports.getAllUsers = async (req, res) => {
     try {
-        if (action === "check-in") {
-            // Prevent multiple check-ins for the same date
-            const existingForDay = await attendanceModel.findOne({
-                user: userId,
-                displayDate,
-            });
-
-            if (existingForDay) {
-                return res.status(400).json({
-                    msg: "Attendance for this date is already logged",
-                    status: false,
-                });
-            }
-
-            // Calculate distance from office and enforce geofence
-            const distanceFromOfficeMeters = calculateDistanceMeters(
-                location.lat,
-                location.lng,
-                OFFICE_COORDS.lat,
-                OFFICE_COORDS.lng
-            );
-
-            if (distanceFromOfficeMeters > MAX_DISTANCE_FROM_OFFICE_METERS) {
-                return res.status(400).json({
-                    msg: "You must be within 500 meters of the office to check-in",
-                    status: false,
-                });
-            }
-
-            // File must be present for check-in
-            if (!req.file) {
-                return res.status(400).json({
-                    msg: "Image file is required for check-in",
-                    status: false,
-                });
-            }
-
-            // Handle image upload (compress + upload to Backblaze, then store URL)
-            const file = req.file;
-            const filename = `${Date.now()}_${userId}.jpeg`;
-            const filepath = `attendance/${filename}`;
-
-            const compressedBuffer = await UploadService.compressImage(
-                file.buffer
-            );
-            const uploadResult = await UploadService.uploadFile(
-                compressedBuffer,
-                filepath
-            );
-
-            if (!uploadResult.status) {
-                return res.status(500).json({
-                    errors: uploadResult.error,
-                    status: false,
-                });
-            }
-
-            // Build location subdocument (GeoJSON Point)
-            const locationDoc = {
-                type: "Point",
-                coordinates: [location.lng, location.lat], // GeoJSON expects [lng, lat]
-                distanceFromOfficeMeters,
-            };
-
-            const deviceDoc = {
-                userAgent: device?.userAgent,
-                cameraDeviceId: device?.selectedCameraDeviceId,
-            };
-
-            const attendance = await attendanceModel.create({
-                user: userId,
-                displayTime,
-                displayDate,
-                checkIn: timestamp,
-                location: locationDoc,
-                device: deviceDoc,
-                image: filepath,
-                status: "present",
-            });
-
-            //Response
-            return res.status(200).json({
-                msg: "Check-in logged successfully",
-                status: true,
-                data: attendance,
-            });
-        }
-
-        // action === "check-out"
-        // Find the open attendance record for the provided date for this user.
-        if (!displayDate) {
-            return res.status(400).json({
-                msg: "displayDate is required for check-out",
-                status: false,
-            });
-        }
-
-        const existing = await attendanceModel.findOne({
-            user: userId,
-            displayDate,
-            checkOut: null,
-        });
-
-        if (!existing) {
-            return res.status(404).json({
-                msg: "No open attendance record found to check-out",
-                status: false,
-            });
-        }
-
-        // Set check-out time
-        existing.checkOut = timestamp;
-
-        // Business rule:
-        // If total worked time between checkIn and checkOut is less than 7 hours 45 minutes,
-        // mark status as "late", otherwise "present".
-        const workDurationMs = existing.checkOut.getTime() - existing.checkIn.getTime();
-
-        if (workDurationMs < 0) {
-            return res.status(400).json({
-                msg: "check-out time cannot be before check-in time",
-                status: false,
-            });
-        }
-
-        const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        const REQUIRED_MS = (7 * 60 + 45) * 60 * 1000; // 7 hours 45 minutes in milliseconds
-
-        if (workDurationMs < TWO_HOURS_MS) {
-            existing.status = "absent";
-        } else if (workDurationMs < REQUIRED_MS) {
-            existing.status = "late";
-        } else {
-            existing.status = "present";
-        }
-
-        await existing.save();
+        const users = await userModel.find({ role: "user" }).sort({ empId: 1 });
 
         //Response
-        return res.status(200).json({
-            msg: "Check-out logged successfully",
-            status: true,
-            data: existing,
-        });
+        return res.status(200).json({ status: true, users });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ errors: error, status: false });
+        return res.status(500).json({ status: false, error: error.message });
     }
 };
 
 /**
  * @description Get User's Attendance
- * @route GET /api/attendance/user/get
+ * @route GET /api/admin/attendance/get/:id
  * @access Private
  */
-module.exports.getAttendance = async (req, res) => {
-    const { _id: userId } = req.user;
+module.exports.getUserAttendance = async (req, res) => {
+    const { id } = req.params;
     const { month } = req.query;
 
     const monthInfo = parseMonthParam(month);
@@ -293,7 +102,7 @@ module.exports.getAttendance = async (req, res) => {
         // Load all attendance records for that user and month (by createdAt)
         let attendance = await attendanceModel
             .find({
-                user: userId,
+                user: id,
                 createdAt: { $gte: start, $lt: end },
             })
             .sort({ createdAt: 1 });
@@ -322,7 +131,7 @@ module.exports.getAttendance = async (req, res) => {
                 const displayDate = date.toLocaleDateString("en-GB"); // dd/mm/yyyy
 
                 docsToInsert.push({
-                    user: userId,
+                    user: id,
                     displayDate,
                     status: "absent",
                     checkIn: null,
