@@ -70,7 +70,7 @@ module.exports.logAttendanceSchema = (payload) => {
         }),
 
         // Kept optional for backward compatibility if body still sends base64 image
-        imageDataUrl: Joi.string().optional(),
+        media: Joi.optional().allow(null),
     }).unknown(false);
 
     return schema.validate(payload);

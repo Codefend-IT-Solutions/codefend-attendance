@@ -98,6 +98,14 @@ module.exports.logAttendance = async (req, res) => {
             .json({ msg: "Invalid timestampIso", status: false });
     }
 
+    // File must be present 
+    if (!req.file) {
+        return res.status(400).json({
+            msg: "Image file is required.",
+            status: false,
+        });
+    }
+
     try {
         if (action === "check-in") {
             // Prevent multiple check-ins for the same date
@@ -124,14 +132,6 @@ module.exports.logAttendance = async (req, res) => {
             if (distanceFromOfficeMeters > MAX_DISTANCE_FROM_OFFICE_METERS) {
                 return res.status(400).json({
                     msg: "You must be within 500 meters of the office to check-in",
-                    status: false,
-                });
-            }
-
-            // File must be present for check-in
-            if (!req.file) {
-                return res.status(400).json({
-                    msg: "Image file is required for check-in",
                     status: false,
                 });
             }
