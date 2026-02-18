@@ -153,6 +153,34 @@ module.exports.getUserAttendance = async (req, res) => {
             });
         }
 
+        // For all past working days in this month, if there is a record with
+        // check-in but no check-out, mark it as "late".
+        const lateUpdateOps = [];
+        attendance.forEach((record) => {
+            const d = record.checkIn || record.createdAt;
+            if (!d) return;
+            const date = new Date(d);
+            const dow = date.getDay(); // 0 = Sun, 6 = Sat
+            const dayNum = date.getDate();
+
+            if (dayNum > maxDayToFill) return; // only days before today (or full month for past months)
+            if (dow === 0 || dow === 6) return; // skip weekends
+
+            if (record.checkIn && !record.checkOut && record.status !== "late") {
+                record.status = "late";
+                lateUpdateOps.push({
+                    updateOne: {
+                        filter: { _id: record._id },
+                        update: { status: "late" },
+                    },
+                });
+            }
+        });
+
+        if (lateUpdateOps.length > 0) {
+            await attendanceModel.bulkWrite(lateUpdateOps);
+        }
+
         let presents = 0;
         let lates = 0;
         let absents = 0;
