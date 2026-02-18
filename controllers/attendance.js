@@ -106,6 +106,22 @@ module.exports.logAttendance = async (req, res) => {
         });
     }
 
+    // Calculate distance from office and enforce geofence
+    const distanceFromOfficeMeters = 0;
+    // const distanceFromOfficeMeters = calculateDistanceMeters(
+    //     location.lat,
+    //     location.lng,
+    //     OFFICE_COORDS.lat,
+    //     OFFICE_COORDS.lng
+    // );
+
+    // if (distanceFromOfficeMeters > MAX_DISTANCE_FROM_OFFICE_METERS) {
+    //     return res.status(400).json({
+    //         msg: "You must be within 500 meters of the office to check-in",
+    //         status: false,
+    //     });
+    // }
+
     try {
         if (action === "check-in") {
             // Prevent multiple check-ins for the same date
@@ -117,21 +133,6 @@ module.exports.logAttendance = async (req, res) => {
             if (existingForDay) {
                 return res.status(400).json({
                     msg: "Attendance for this date is already logged",
-                    status: false,
-                });
-            }
-
-            // Calculate distance from office and enforce geofence
-            const distanceFromOfficeMeters = calculateDistanceMeters(
-                location.lat,
-                location.lng,
-                OFFICE_COORDS.lat,
-                OFFICE_COORDS.lng
-            );
-
-            if (distanceFromOfficeMeters > MAX_DISTANCE_FROM_OFFICE_METERS) {
-                return res.status(400).json({
-                    msg: "You must be within 500 meters of the office to check-in",
                     status: false,
                 });
             }

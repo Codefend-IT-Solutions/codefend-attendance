@@ -4,6 +4,7 @@ const attendanceModel = require("../models/Attendance");
 
 // Services
 const UploadService = require("../services/UploadService");
+const FaceService = require("../services/FaceService");
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -298,5 +299,146 @@ module.exports.getUserAttendance = async (req, res) => {
     } catch (error) {
         console.log(error);
         return res.status(500).json({ errors: error, status: false });
+    }
+};
+
+/**
+ * @description Upload Base Image for User (Face Recognition)
+ * @route POST /api/admin/users/:userId/base-image
+ * @access Private (Admin only)
+ * 
+ * Accepts multipart form with:
+ * - image: The base image file
+ * - descriptor: JSON stringified 128-dimension face descriptor array (computed on frontend)
+ */
+module.exports.uploadBaseImage = async (req, res) => {
+    const { userId } = req.params;
+
+    // Validate userId
+    if (!userId) {
+        return res.status(400).json({
+            msg: "User ID is required",
+            status: false,
+        });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+        return res.status(400).json({
+            msg: "No image file provided",
+            status: false,
+        });
+    }
+
+    // Parse and validate descriptor from request body
+    let descriptor = null;
+    if (req.body.descriptor) {
+        try {
+            descriptor = JSON.parse(req.body.descriptor);
+        } catch {
+            return res.status(400).json({
+                msg: "Invalid descriptor format. Expected JSON array.",
+                status: false,
+            });
+        }
+    }
+
+    // Validate descriptor
+    if (!descriptor || !FaceService.isValidDescriptor(descriptor)) {
+        return res.status(400).json({
+            msg: "Invalid face descriptor. Must be an array of 128 numbers.",
+            status: false,
+        });
+    }
+
+    try {
+        // Check if user exists
+        const user = await userModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                msg: "User not found",
+                status: false,
+            });
+        }
+
+        // Compress and upload image to Backblaze B2
+        const compressedBuffer = await UploadService.compressImage(req.file.buffer);
+        const fileName = `base-images/${userId}.jpeg`;
+        const uploadResult = await UploadService.uploadFile(compressedBuffer, fileName);
+
+        if (!uploadResult.status) {
+            return res.status(500).json({
+                msg: "Failed to upload image to storage",
+                status: false,
+                error: uploadResult.error,
+            });
+        }
+
+        // Generate URL for the uploaded image
+        const baseImageUrl = UploadService.generateUrl(fileName);
+
+        // Update user with base image URL and face descriptor
+        await userModel.findByIdAndUpdate(userId, {
+            baseImage: baseImageUrl,
+            faceDescriptor: descriptor,
+        });
+
+        return res.status(200).json({
+            msg: "Base image uploaded and face descriptor saved successfully",
+            status: true,
+            data: {
+                baseImage: baseImageUrl,
+                hasDescriptor: true,
+            },
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            msg: "Internal server error",
+            status: false,
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * @description Get User's Base Image Status
+ * @route GET /api/admin/users/:userId/base-image
+ * @access Private (Admin only)
+ */
+module.exports.getBaseImageStatus = async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+        return res.status(400).json({
+            msg: "User ID is required",
+            status: false,
+        });
+    }
+
+    try {
+        const user = await userModel.findById(userId).select("+faceDescriptor");
+        if (!user) {
+            return res.status(404).json({
+                msg: "User not found",
+                status: false,
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            data: {
+                hasBaseImage: !!user.baseImage,
+                baseImage: user.baseImage || null,
+                hasDescriptor: !!(user.faceDescriptor && user.faceDescriptor.length === 128),
+            },
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            msg: "Internal server error",
+            status: false,
+            error: error.message,
+        });
     }
 };

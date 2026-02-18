@@ -26,6 +26,16 @@ const userSchema = new mongoose.Schema({
         maxlength: [1024, "Password cannot excede 1024 characters"],
         select: false,
     },
+    // Face recognition fields
+    baseImage: {
+        type: String, // URL to the base image on Backblaze B2
+        default: null,
+    },
+    faceDescriptor: {
+        type: [Number], // 128-dimension face descriptor array
+        default: null,
+        select: false, // Don't include in regular queries for security
+    },
 }, { timestamps: true })
 
 module.exports = mongoose.model("User", userSchema)

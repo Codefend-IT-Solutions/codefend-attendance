@@ -7,6 +7,7 @@ const {
   getUserInfo,
   editProfile,
   changePassword,
+  getFaceDescriptor,
 } = require("../controllers/user");
 
 // Middlewares
@@ -22,5 +23,6 @@ router.use(verifyUser);
 router.route("/whoami").get(getUserInfo);
 router.route("/edit").put(editProfile);
 router.route("/change-password/:id").put(changePassword);
+router.route("/face-descriptor").get(getFaceDescriptor);
 
 module.exports = router;

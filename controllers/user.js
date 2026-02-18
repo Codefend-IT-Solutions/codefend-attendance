@@ -216,3 +216,57 @@ module.exports.changePassword = async (req, res) => {
         return res.status(500).json({ errors: error });
     }
 };
+
+/**
+ * @description Get User's Face Descriptor for Face Recognition
+ * @route GET /api/user/face-descriptor
+ * @access Private (requires auth token)
+ */
+module.exports.getFaceDescriptor = async (req, res) => {
+    const { _id } = req.user;
+
+    try {
+        const user = await userModel.findById(_id).select("+faceDescriptor baseImage");
+        if (!user) {
+            return res.status(404).json({
+                msg: "User not found",
+                status: false,
+            });
+        }
+
+        // Check if user has a registered base image
+        if (!user.baseImage) {
+            return res.status(404).json({
+                msg: "No base image registered. Please contact admin to register your face.",
+                status: false,
+                hasBaseImage: false,
+            });
+        }
+
+        // Check if face descriptor exists
+        if (!user.faceDescriptor || user.faceDescriptor.length !== 128) {
+            return res.status(404).json({
+                msg: "Face descriptor not computed. Please contact admin.",
+                status: false,
+                hasBaseImage: true,
+                hasDescriptor: false,
+            });
+        }
+
+        return res.status(200).json({
+            msg: "Face descriptor retrieved successfully",
+            status: true,
+            data: {
+                descriptor: user.faceDescriptor,
+                baseImage: user.baseImage,
+            },
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            msg: "Internal server error",
+            status: false,
+            error: error.message,
+        });
+    }
+};
