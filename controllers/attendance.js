@@ -13,8 +13,45 @@ const { calculateDistanceMeters } = require("../utils/Methods");
 // Helper Variables
 const OFFICE_COORDS = { lat: 33.97331944724137, lng: 71.45657513924102 };
 const MAX_DISTANCE_FROM_OFFICE_METERS = 500;
+const TIMEZONE = "Asia/Karachi"; // Peshawar, Pakistan timezone (UTC+5)
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * Get current server time formatted for Peshawar timezone
+ */
+const getServerTimeFormatted = () => {
+    const now = new Date();
+
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+    });
+
+    const parts = formatter.formatToParts(now);
+    const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+
+    const year = getPart("year");
+    const month = getPart("month");
+    const day = getPart("day");
+    const hour = getPart("hour");
+    const minute = getPart("minute");
+    const second = getPart("second");
+    const dayPeriod = getPart("dayPeriod");
+
+    return {
+        timestamp: now,
+        timestampIso: now.toISOString(),
+        displayDate: `${day}/${month}/${year}`,
+        displayTime: `${hour}:${minute}:${second} ${dayPeriod}`,
+    };
+};
 
 const parseMonthParam = (monthStr) => {
     // Expected format: YYYY-MM
@@ -84,19 +121,17 @@ module.exports.logAttendance = async (req, res) => {
     const { _id: userId } = req.user;
     const {
         action,
-        timestampIso,
-        displayTime,
-        displayDate,
+        // Note: We ignore client-provided timestampIso, displayTime, displayDate
+        // and use server time instead to prevent manipulation
         location,
         device,
     } = value;
 
-    const timestamp = new Date(timestampIso);
-    if (Number.isNaN(timestamp.getTime())) {
-        return res
-            .status(400)
-            .json({ msg: "Invalid timestampIso", status: false });
-    }
+    // Use server time (Peshawar timezone) - prevents client manipulation
+    const serverTime = getServerTimeFormatted();
+    const timestamp = serverTime.timestamp;
+    const displayTime = serverTime.displayTime;
+    const displayDate = serverTime.displayDate;
 
     // File must be present 
     if (!req.file) {

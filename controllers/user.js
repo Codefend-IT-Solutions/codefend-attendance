@@ -218,6 +218,66 @@ module.exports.changePassword = async (req, res) => {
 };
 
 /**
+ * @description Get Server Time (Peshawar, Pakistan - Asia/Karachi timezone)
+ * @route GET /api/user/server-time
+ * @access Private (requires auth token)
+ */
+module.exports.getServerTime = async (req, res) => {
+    try {
+        const now = new Date();
+        const timezone = "Asia/Karachi"; // Peshawar, Pakistan timezone (UTC+5)
+
+        // Format date and time in Peshawar timezone
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: timezone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+        });
+
+        const parts = formatter.formatToParts(now);
+        const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+
+        const year = getPart("year");
+        const month = getPart("month");
+        const day = getPart("day");
+        const hour = getPart("hour");
+        const minute = getPart("minute");
+        const second = getPart("second");
+        const dayPeriod = getPart("dayPeriod");
+
+        // Format: "DD/MM/YYYY" for displayDate
+        const displayDate = `${day}/${month}/${year}`;
+        // Format: "HH:MM:SS AM/PM" for displayTime
+        const displayTime = `${hour}:${minute}:${second} ${dayPeriod}`;
+        // ISO string for timestamp (server's actual time)
+        const timestampIso = now.toISOString();
+
+        return res.status(200).json({
+            status: true,
+            data: {
+                timestampIso,
+                displayDate,
+                displayTime,
+                timezone,
+                serverTime: now.getTime(), // Unix timestamp in ms
+            },
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            msg: "Internal server error",
+            status: false,
+            error: error.message,
+        });
+    }
+};
+
+/**
  * @description Get User's Face Descriptor for Face Recognition
  * @route GET /api/user/face-descriptor
  * @access Private (requires auth token)

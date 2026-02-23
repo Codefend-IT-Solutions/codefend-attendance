@@ -8,6 +8,7 @@ const {
   editProfile,
   changePassword,
   getFaceDescriptor,
+  getServerTime,
 } = require("../controllers/user");
 
 // Middlewares
@@ -24,5 +25,6 @@ router.route("/whoami").get(getUserInfo);
 router.route("/edit").put(editProfile);
 router.route("/change-password/:id").put(changePassword);
 router.route("/face-descriptor").get(getFaceDescriptor);
+router.route("/server-time").get(getServerTime);
 
 module.exports = router;
