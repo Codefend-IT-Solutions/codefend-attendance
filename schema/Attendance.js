@@ -13,27 +13,9 @@ module.exports.logAttendanceSchema = (payload) => {
                 "any.required": "Action is required",
             }),
 
-        timestampIso: Joi.string()
-            .isoDate()
-            .required()
-            .messages({
-                "string.isoDate": "timestampIso must be a valid ISO date string",
-                "any.required": "timestampIso is required",
-            }),
-
-        displayTime: Joi.when("action", {
-            is: "check-in",
-            then: Joi.string().required().messages({
-                "string.empty": "displayTime is required for check-in",
-                "any.required": "displayTime is required for check-in",
-            }),
-            otherwise: Joi.string().optional(),
-        }),
-
-        displayDate: Joi.string().required().messages({
-            "string.empty": "displayDate is required",
-            "any.required": "displayDate is required",
-        }),
+        timestampIso: Joi.string().optional().allow(""),
+        displayTime: Joi.string().optional().allow(""),
+        displayDate: Joi.string().optional().allow(""), 
 
         location: Joi.when("action", {
             is: "check-in",
