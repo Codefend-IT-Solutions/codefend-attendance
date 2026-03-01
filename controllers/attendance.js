@@ -371,13 +371,65 @@ module.exports.getAttendance = async (req, res) => {
         if (docsToInsert.length > 0) {
             const inserted = await attendanceModel.insertMany(docsToInsert);
             attendance = attendance.concat(inserted);
-            // Re-sort combined array by effective date
-            attendance.sort((a, b) => {
-                const da = new Date(a.checkIn || a.createdAt);
-                const db = new Date(b.checkIn || b.createdAt);
-                return da - db;
-            });
         }
+
+        // Deduplicate: if multiple records exist for the same date, keep the one that is NOT "absent"
+        // Priority: present/late/discord-absent > absent (auto-created)
+        // Use displayDate for comparison since it represents the actual local date
+        const recordsByDate = new Map();
+        for (const record of attendance) {
+            // Normalize displayDate to a consistent format for comparison
+            // displayDate can be "16/02/2026" (DD/MM/YYYY) or "2/16/2026" (M/D/YYYY)
+            let dateKey = record.displayDate;
+            if (!dateKey) continue;
+
+            // Convert to YYYY-MM-DD for consistent comparison
+            const parts = dateKey.split("/");
+            if (parts.length === 3) {
+                // Check if first part is day (DD/MM/YYYY) or month (M/D/YYYY)
+                if (parts[2].length === 4) {
+                    // Year is last, could be DD/MM/YYYY or M/D/YYYY
+                    const first = parseInt(parts[0], 10);
+                    const second = parseInt(parts[1], 10);
+                    const third = parseInt(parts[2], 10);
+                    
+                    // If first > 12, it's definitely DD/MM/YYYY
+                    // Otherwise assume M/D/YYYY (US format from frontend)
+                    if (first > 12) {
+                        // DD/MM/YYYY
+                        dateKey = `${third}-${String(second).padStart(2, "0")}-${String(first).padStart(2, "0")}`;
+                    } else {
+                        // M/D/YYYY
+                        dateKey = `${third}-${String(first).padStart(2, "0")}-${String(second).padStart(2, "0")}`;
+                    }
+                }
+            }
+
+            const existing = recordsByDate.get(dateKey);
+            if (!existing) {
+                recordsByDate.set(dateKey, record);
+            } else {
+                // Prefer record with status other than "absent"
+                const existingIsAbsent = existing.status === "absent";
+                const currentIsAbsent = record.status === "absent";
+
+                if (existingIsAbsent && !currentIsAbsent) {
+                    // Current record has real status, replace the absent one
+                    recordsByDate.set(dateKey, record);
+                }
+                // If both are absent or both are not absent, keep the first one
+            }
+        }
+
+        // Replace attendance array with deduplicated records
+        attendance = Array.from(recordsByDate.values());
+
+        // Sort by effective date
+        attendance.sort((a, b) => {
+            const da = new Date(a.checkIn || a.createdAt);
+            const db = new Date(b.checkIn || b.createdAt);
+            return da - db;
+        });
 
         // For all past working days in this month, if there is a record with
         // check-in but no check-out, mark it as "late".
@@ -472,11 +524,8 @@ module.exports.getAttendance = async (req, res) => {
             let statusLabel = "Unknown";
             if (record.status === "present") statusLabel = "Present";
             else if (record.status === "late") statusLabel = "Late";
-            else if (
-                record.status === "absent" ||
-                record.status === "discord-absent"
-            )
-                statusLabel = "Absent";
+            else if (record.status === "absent") statusLabel = "Absent";
+            else if (record.status === "discord-absent") statusLabel = "Discord Absent";
 
             // Send raw ISO timestamps for check-in / check-out.
             // Frontend is responsible for rendering them in the user's local timezone.

@@ -2,7 +2,7 @@ const router = require("express").Router();
 const multer = require("multer");
 
 // Controllers
-const { getAllUsers, getUserAttendance, uploadBaseImage, getBaseImageStatus } = require("../controllers/admin");
+const { getAllUsers, getUserAttendance, uploadBaseImage, getBaseImageStatus, getDiscordAttendance } = require("../controllers/admin");
 
 // Middlewares
 const verifyAdmin = require("../middlewares/verifyAdmin");
@@ -30,5 +30,8 @@ router.route("/attendance/get/:id").get(getUserAttendance);
 router.route("/users/:userId/base-image")
     .get(getBaseImageStatus)
     .post(upload.single("image"), uploadBaseImage);
+
+// Discord attendance routes (single API fetches data + syncs with MongoDB)
+router.route("/discord/attendance").get(getDiscordAttendance);
 
 module.exports = router;
