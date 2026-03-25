@@ -260,7 +260,7 @@ module.exports.logAttendance = async (req, res) => {
         }
 
         const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        const REQUIRED_MS = (6 * 60 + 45) * 60 * 1000; // 6 hours 45 minutes in milliseconds
+        const REQUIRED_MS = (7 * 60 + 45) * 60 * 1000; // 7 hours 45 minutes in milliseconds
 
         if (workDurationMs < TWO_HOURS_MS) {
             existing.status = "absent";
